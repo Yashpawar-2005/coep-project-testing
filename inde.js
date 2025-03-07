@@ -1,7 +1,9 @@
+// Import necessary libraries - using dynamic import for ESM modules
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
 const { ChromaClient } = require("chromadb");
+const { RecursiveCharacterTextSplitter } = require("langchain/text_splitter");
 
 const app = express();
 const PORT = 3000;
@@ -9,12 +11,18 @@ const PORT = 3000;
 app.use(express.json());
 app.use(cors());
 
+// ChromaDB client
 const chroma = new ChromaClient({ path: "http://localhost:8000" });
 let collection;
+let embeddingModelPromise = null;
+let rerankerPromise = null;
 
 async function setupChroma() {
     try {
-        collection = await chroma.getOrCreateCollection({ name: "documents" });
+        collection = await chroma.getOrCreateCollection({ 
+            name: "documents",
+            metadata: { "hnsw:space": "cosine" } // Using cosine similarity for BGE embeddings
+        });
         console.log("ChromaDB collection setup complete");
     } catch (error) {
         console.error("ChromaDB setup error:", error);
@@ -22,10 +30,37 @@ async function setupChroma() {
     }
 }
 
+// Initialize embedding model (lazy-loading)
+async function getEmbeddingModel() {
+    if (!embeddingModelPromise) {
+        // Use axios for embedding API calls to avoid ESM module issues
+        console.log("Setting up embedding model connection...");
+        embeddingModelPromise = Promise.resolve(true);
+    }
+    return embeddingModelPromise;
+}
+
+// Split text into chunks using LangChain's TextSplitter
+async function chunkText(text) {
+    const splitter = new RecursiveCharacterTextSplitter({
+        chunkSize: 512,
+        chunkOverlap: 50,
+        separators: ["\n\n", "\n", " ", ""]
+    });
+    
+    const chunks = await splitter.createDocuments([text]);
+    return chunks.map(chunk => chunk.pageContent);
+}
+
+// Get embeddings using remote embedding API (Ollama with BGE model)
 async function getEmbedding(text) {
     try {
+        // Initialize model (this is just a placeholder action now)
+        await getEmbeddingModel();
+        
+        // Call Ollama API for embeddings with BGE model
         const response = await axios.post("http://localhost:11434/api/embeddings", {
-            model: "deepseek-r1",
+            model: "bge-large", // Assuming you've pulled this model in Ollama
             prompt: text,
         });
 
@@ -35,11 +70,86 @@ async function getEmbedding(text) {
 
         return response.data.embedding;
     } catch (error) {
-        console.error("Error getting embeddings:", error.response?.data || error.message);
-        throw new Error("Embedding failed: " + (error.response?.data || error.message));
+        // Try fallback to deepseek if BGE model is not available
+        console.warn("Error with BGE model, trying fallback:", error.message);
+        
+        try {
+            const fallbackResponse = await axios.post("http://localhost:11434/api/embeddings", {
+                model: "deepseek-r1",
+                prompt: text,
+            });
+            
+            if (!fallbackResponse.data.embedding) {
+                throw new Error("No embedding returned from fallback API");
+            }
+            
+            return fallbackResponse.data.embedding;
+        } catch (fallbackError) {
+            console.error("All embedding attempts failed:", fallbackError.message);
+            throw new Error("Embedding failed with all available models");
+        }
     }
 }
 
+// Rerank documents using semantic similarity (since we can't use the reranker directly)
+async function rerankDocuments(query, documents, topK = 3) {
+    if (documents.length <= 1) return documents;
+    
+    try {
+        // Simple reranking mechanism - get query embedding and compare with documents
+        // Convert query to embedding
+        const queryEmbedding = await getEmbedding(query);
+        
+        // Get embeddings for all documents
+        const docEmbeddings = await Promise.all(documents.map(doc => getEmbedding(doc)));
+        
+        // Calculate similarity scores
+        const scoredDocs = docEmbeddings.map((embedding, index) => {
+            // Cosine similarity
+            const similarity = calculateCosineSimilarity(queryEmbedding, embedding);
+            return {
+                score: similarity,
+                doc: documents[index]
+            };
+        });
+        
+        // Sort by relevance score (descending)
+        scoredDocs.sort((a, b) => b.score - a.score);
+        
+        // Return top K results
+        return scoredDocs.slice(0, topK).map(item => item.doc);
+    } catch (error) {
+        console.error("Reranking error:", error);
+        // Fall back to original documents if reranking fails
+        return documents.slice(0, topK);
+    }
+}
+
+// Helper function to calculate cosine similarity
+function calculateCosineSimilarity(vec1, vec2) {
+    if (vec1.length !== vec2.length) {
+        throw new Error("Vectors must have the same length");
+    }
+    
+    let dotProduct = 0;
+    let mag1 = 0;
+    let mag2 = 0;
+    
+    for (let i = 0; i < vec1.length; i++) {
+        dotProduct += vec1[i] * vec2[i];
+        mag1 += vec1[i] * vec1[i];
+        mag2 += vec2[i] * vec2[i];
+    }
+    
+    mag1 = Math.sqrt(mag1);
+    mag2 = Math.sqrt(mag2);
+    
+    if (mag1 === 0 || mag2 === 0) return 0;
+    
+    return dotProduct / (mag1 * mag2);
+}
+
+// Store document chunks
 app.post("/store", async (req, res) => {
     const { content } = req.body;
 
@@ -48,59 +158,103 @@ app.post("/store", async (req, res) => {
     }
 
     try {
-        const vector = await getEmbedding(content);
-        await collection.add({
-            ids: [Date.now().toString()],
-            embeddings: [vector],
-            metadatas: [{ content }],
-        });
+        // Split content into chunks
+        const chunks = await chunkText(content);
+        console.log(`Document split into ${chunks.length} chunks`);
         
-        res.json({ message: "Document stored successfully" });
+        // Process chunks in batches to avoid memory issues
+        const batchSize = 10;
+        for (let i = 0; i < chunks.length; i += batchSize) {
+            const batchChunks = chunks.slice(i, i + batchSize);
+            
+            // Get embeddings for each chunk
+            const embeddings = await Promise.all(batchChunks.map(chunk => getEmbedding(chunk)));
+            
+            // Generate unique IDs for each chunk
+            const ids = batchChunks.map(() => `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`);
+            
+            // Add to ChromaDB
+            await collection.add({
+                ids,
+                embeddings,
+                metadatas: batchChunks.map(chunk => ({ content: chunk })),
+            });
+            
+            console.log(`Stored batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(chunks.length/batchSize)}`);
+        }
+        
+        res.json({ 
+            message: "Document stored successfully", 
+            chunks: chunks.length 
+        });
     } catch (error) {
         console.error("Store error:", error);
         res.status(500).json({ error: "Failed to store document: " + error.message });
     }
 });
 
+// Generate response based on retrieved context
 app.post("/generate", async (req, res) => {
-    const { prompt } = req.body;
+    const { prompt, useReranker = true, topK = 5 } = req.body;
 
     if (!prompt) {
         return res.status(400).json({ error: "Prompt is required" });
     }
 
     try {
-        // Get embedding for the prompt
+        // Create embedding for the query
         const vector = await getEmbedding(prompt);
-        console.log("Embedding generated successfully");
+        console.log("Query embedding generated successfully");
         
+        // Retrieve relevant documents from ChromaDB
         const results = await collection.query({
             queryEmbeddings: [vector],
-            nResults: 2,
+            nResults: topK * 2, // Retrieve more than needed for reranking
         });
         
-        console.log("ChromaDB query results:", JSON.stringify(results, null, 2));
-        let retrievedDocs = "";
+        let retrievedDocs = [];
         if (results.metadatas && results.metadatas[0]) {
             retrievedDocs = results.metadatas[0]
                 .filter(doc => doc && doc.content)
-                .map(doc => doc.content)
-                .join("\n");
+                .map(doc => doc.content);
         }
         
-        console.log("Retrieved context:", retrievedDocs);
-
-        // Make generation request to DeepSeek
+        console.log(`Retrieved ${retrievedDocs.length} documents from vector search`);
+        
+        // Apply reranking if enabled and we have multiple documents
+        let contextDocs = retrievedDocs;
+        if (useReranker && retrievedDocs.length > 1) {
+            contextDocs = await rerankDocuments(prompt, retrievedDocs, topK);
+            console.log(`Reranked and selected top ${contextDocs.length} documents`);
+        }
+        
+        // Combine context with prompt
+        const context = contextDocs.join("\n\n");
+        console.log("Context preparation complete");
+        
+        // Generate response with DeepSeek
+        const systemPrompt = "You are a schema generation assistant. Based on the context and user prompt, generate the most appropriate database schema.";
+        const fullPrompt = `${systemPrompt}\n\nContext:\n${context}\n\nUser: ${prompt}`;
+        
         const generateResponse = await axios.post("http://localhost:11434/api/generate", {
             model: "deepseek-r1",
-            prompt: `Context: ${retrievedDocs}\n\nUser: ${prompt}`,
-            stream: false  // Changed to false to get complete response at once
+            prompt: fullPrompt,
+            stream: false,
+            temperature: 0.1, // Lower temperature for more deterministic results
+            top_p: 0.9
         }, {
-            responseType: 'json'
+            responseType: 'json',
+            // timeout: 30000 // 30 seconds timeout
         });
 
         console.log("Generation response received");
-        res.json(generateResponse.data);
+        res.json({
+            ...generateResponse.data,
+            meta: {
+                contextCount: contextDocs.length,
+                rerankerUsed: useReranker && retrievedDocs.length > 1
+            }
+        });
     } catch (error) {
         console.error("Generate error:", error);
         res.status(500).json({ 
@@ -109,13 +263,39 @@ app.post("/generate", async (req, res) => {
         });
     }
 });
-app.get("/health", (req, res) => {
-    res.json({ status: "OK", timestamp: new Date().toISOString() });
+
+// Utility endpoint to clear the collection
+app.post("/clear", async (req, res) => {
+    try {
+        await collection.delete();
+        collection = await chroma.createCollection({ 
+            name: "documents",
+            metadata: { "hnsw:space": "cosine" }
+        });
+        res.json({ message: "Collection cleared successfully" });
+    } catch (error) {
+        console.error("Clear collection error:", error);
+        res.status(500).json({ error: "Failed to clear collection: " + error.message });
+    }
 });
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+    res.json({ 
+        status: "OK", 
+        timestamp: new Date().toISOString(),
+        models: {
+            embedding: embeddingModelPromise ? "configured" : "not configured",
+        }
+    });
+});
+
+// Start the server
 app.listen(PORT, async () => {
     try {
         await setupChroma();
+        // Pre-initialize the embedding connection
+        await getEmbeddingModel();
         console.log(`🚀 Server running on http://localhost:${PORT}`);
     } catch (error) {
         console.error("Failed to start server:", error);
