@@ -193,7 +193,7 @@ app.post("/store", async (req, res) => {
     }
 });
 
-// Generate response based on retrieved context
+
 app.post("/generate", async (req, res) => {
     const { prompt, useReranker = true, topK = 5 } = req.body;
 
@@ -202,14 +202,12 @@ app.post("/generate", async (req, res) => {
     }
 
     try {
-        // Create embedding for the query
+
         const vector = await getEmbedding(prompt);
         console.log("Query embedding generated successfully");
-        
-        // Retrieve relevant documents from ChromaDB
         const results = await collection.query({
             queryEmbeddings: [vector],
-            nResults: topK * 2, // Retrieve more than needed for reranking
+            nResults: topK * 2, 
         });
         
         let retrievedDocs = [];
@@ -220,41 +218,80 @@ app.post("/generate", async (req, res) => {
         }
         
         console.log(`Retrieved ${retrievedDocs.length} documents from vector search`);
-        
-        // Apply reranking if enabled and we have multiple documents
         let contextDocs = retrievedDocs;
         if (useReranker && retrievedDocs.length > 1) {
             contextDocs = await rerankDocuments(prompt, retrievedDocs, topK);
             console.log(`Reranked and selected top ${contextDocs.length} documents`);
         }
-        
-        // Combine context with prompt
         const context = contextDocs.join("\n\n");
         console.log("Context preparation complete");
-        
-        // Generate response with DeepSeek
         const systemPrompt = "You are a schema generation assistant. Based on the context and user prompt, generate the most appropriate database schema.";
         const fullPrompt = `${systemPrompt}\n\nContext:\n${context}\n\nUser: ${prompt}`;
-        
-        const generateResponse = await axios.post("http://localhost:11434/api/generate", {
-            model: "deepseek-r1",
-            prompt: fullPrompt,
-            stream: false,
-            temperature: 0.1, // Lower temperature for more deterministic results
-            top_p: 0.9
-        }, {
-            responseType: 'json',
-            // timeout: 30000 // 30 seconds timeout
-        });
-
-        console.log("Generation response received");
-        res.json({
-            ...generateResponse.data,
-            meta: {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        const metaInfo = {
+            event: 'meta',
+            data: JSON.stringify({
                 contextCount: contextDocs.length,
                 rerankerUsed: useReranker && retrievedDocs.length > 1
+            })
+        };
+        res.write(`data: ${JSON.stringify(metaInfo)}\n\n`);
+        const response = await axios({
+            method: 'post',
+            url: 'http://localhost:11434/api/generate',
+            data: {
+                model: "deepseek-r1",
+                prompt: fullPrompt,
+                stream: true,
+                temperature: 0.1,
+                top_p: 0.9
+            },
+            responseType: 'stream'
+        });
+        
+        console.log("Started streaming response");
+        
+        
+        response.data.on('data', (chunk) => {
+            try {
+                const lines = chunk.toString().split('\n').filter(line => line.trim() !== '');
+                
+                for (const line of lines) {
+                    const jsonData = JSON.parse(line);
+                    const chunkEvent = {
+                        event: 'chunk',
+                        data: jsonData.response
+                    };
+                    res.write(`data: ${JSON.stringify(chunkEvent)}\n\n`);
+                    if (jsonData.done) {
+                        const doneEvent = {
+                            event: 'done',
+                            data: {}
+                        };
+                        res.write(`data: ${JSON.stringify(doneEvent)}\n\n`);
+                        res.end();
+                    }
+                }
+            } catch (error) {
+                console.error("Error parsing streaming chunk:", error);
+
             }
         });
+        response.data.on('error', (error) => {
+            console.error("Stream error:", error);
+            const errorEvent = {
+                event: 'error',
+                data: { message: error.message }
+            };
+            res.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
+            res.end();
+        });
+        response.data.on('end', () => {
+            res.end();
+        });
+        
     } catch (error) {
         console.error("Generate error:", error);
         res.status(500).json({ 
@@ -263,8 +300,6 @@ app.post("/generate", async (req, res) => {
         });
     }
 });
-
-// Utility endpoint to clear the collection
 app.post("/clear", async (req, res) => {
     try {
         await collection.delete();
@@ -279,7 +314,7 @@ app.post("/clear", async (req, res) => {
     }
 });
 
-// Health check endpoint
+
 app.get("/health", (req, res) => {
     res.json({ 
         status: "OK", 
@@ -290,11 +325,10 @@ app.get("/health", (req, res) => {
     });
 });
 
-// Start the server
+
 app.listen(PORT, async () => {
     try {
         await setupChroma();
-        // Pre-initialize the embedding connection
         await getEmbeddingModel();
         console.log(`🚀 Server running on http://localhost:${PORT}`);
     } catch (error) {
