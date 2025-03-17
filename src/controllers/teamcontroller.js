@@ -23,7 +23,7 @@ export const create_room=async (req,res) => {
         const teamcode = await prisma.teamcode.create({
             data: {
                 teamId: room.id, 
-            },
+            }
         });
         await prisma.team.update({
             where: { id: room.id },
@@ -62,7 +62,7 @@ export const join_room=async (req,res) => {
       data: {
         teams: {
           connect: { id: find_room.id },
-        },
+        }
     }
     })
     res.json({
@@ -70,6 +70,7 @@ export const join_room=async (req,res) => {
         data:find_room
     })
 } catch (error) {
+    console.log(error)
     res.status(500).json({ message: "Internal server error.", error: error.message });
 }
 }
@@ -78,7 +79,7 @@ export const get_room_info=async (req,res) => {
         const roomid=req.params.roomid;
         const id= parseInt(roomid)
         if(id<=0){
-            res.json({message:'wrong params check again'})
+          return  res.json({message:'wrong params check again'})
         }
         const find_room=await prisma.team.findFirst({
             where:{
@@ -86,7 +87,7 @@ export const get_room_info=async (req,res) => {
             },
             include: { 
                 members: true,
-                teamcodes: {
+                teamcode: {
                     include: {
                         maincodes: true,
                         pendingcodes: true,

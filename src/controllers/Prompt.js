@@ -145,12 +145,18 @@ const submit_to_admin = async (req, res) => {
       }
 
       const prog = JSON.stringify(progress);
-
+      const team=await prisma.team.findFirst({
+        where:{id:Number(teamid)},
+        include:{
+            teamcode:true
+        }
+      })
+      // console.log(team)
       const data = await prisma.tempcodes.create({
           data: {
               userId: userId,
               content: prog,
-              pendingteamcodeid:Number(teamid) 
+              pendingteamcodeid: team.teamcode.id
           },
       });
 
