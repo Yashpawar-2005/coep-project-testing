@@ -1,17 +1,29 @@
 import { prompt_for_yes_no } from "../utils/prompts.js";
 const OLLAMA_URL = process.env.OLLAMA_URL;
+const parsedata = (modelOutput) => {
+  const output = modelOutput.split('</think>')[1] || modelOutput;
+  const match = output.match(/\b(yes|no)\b/i);
 
-export default async function streamResponse(req,res,next) {
+  return match ? match[0].toLowerCase() : 'no';
+};
+export default async function streamresponse(req,res,next) {
     const {prompt}=req.body;
   try {
     const response = await fetch(`${OLLAMA_URL}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'olmo2',
+        model: 'deepseek-r1',
         prompt: prompt+prompt_for_yes_no,
         stream: false,
-      }),
+        // options: {
+        //   temperature: 0.0,      // Makes the output deterministic (consistent)
+        //   max_tokens: 5,         // Limit token length to prevent extra output
+        //   stop: ['\n'],          // Stop after the first line (prevents further explanation)
+        //   repeat_penalty: 1.5,   // Strongly penalize repetitive/long outputs
+        // },
+      },
+    ),
     });
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
@@ -29,14 +41,14 @@ export default async function streamResponse(req,res,next) {
     // return response_to_prompt
     const data = await response.json();
     const modeloutput = data.response;
-    console.log('Model Output:', modeloutput);
-    req.body.redis_input = modeloutput;
+    console.log(modeloutput)
+    // console.log('Model Output:', modeloutput);
+    const parseddata=parsedata(modeloutput)
+    console.log(parseddata)
+    req.body.redis_input =parseddata;
     next();
   } catch (error) {
     console.error('❌ Error streaming from DeepSeek R1:', error.message);
   }
 }
 
-
-
-// streamResponse('Write a haiku about the beauty of nature.');

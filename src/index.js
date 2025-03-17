@@ -13,6 +13,7 @@ await connectDatabases();
 const base_url="/api/v1"
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
 app.use(`${base_url}`,promptroute)
 app.use(`${base_url}/user`,userRoutes)
 app.use(`${base_url}/auth`,authRoutes)

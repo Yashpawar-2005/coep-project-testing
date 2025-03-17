@@ -10,7 +10,7 @@ const prompt_to_redis_handler = async (req, res) => {
   try {
     const check = (await redis.lLen("userstack")) === 0;
 
-    if (redis_input.toLowerCase().trim() =="yes") {
+    if (redis_input.toLowerCase().trim() =="yes" && check>0) {
         console.log('omgggg')
       if (check) {
         return res.json({ message: "nothing in stack" });
@@ -19,7 +19,7 @@ const prompt_to_redis_handler = async (req, res) => {
       const tollm = await redis.rPop("userstack");
       const parsedtollm = JSON.parse(tollm);
       console.log(parsedtollm);
-      const prevcomment=parsedtollm.query
+      const prevcomment=parsedtollm.query;
       const response = await fetch(`${OLLAMA_URL}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
