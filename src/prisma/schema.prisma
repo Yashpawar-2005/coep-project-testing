@@ -1,0 +1,46 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id    Int    @id @default(autoincrement())
+  name  String
+  email String @unique
+  password String 
+  teams Team[]
+  adminof Team? @relation("admin_relation")
+  tempcodes tempcodes[]
+}
+model Team{
+  id Int @id @default(autoincrement())
+  name String @unique
+  members User[]
+  admin   User? @relation("admin_relation", fields: [adminid], references: [id])
+  adminid Int? @unique
+  teamcodes Teamcode[]
+}
+model Teamcode{
+  id              Int         @id @default(autoincrement())
+  team           Team        @relation(fields: [teamId], references: [id])
+  teamId         Int         @unique
+  maincodes      tempcodes[] @relation("maincodes_relation")
+  pendingcodes   tempcodes[] @relation("pendingcodes_relation")
+}
+model tempcodes{
+ id         Int      @id @default(autoincrement())
+  content    String
+  user       User     @relation(fields: [userId], references: [id])
+  userId     Int
+  teamcode   Teamcode? @relation("maincodes_relation", fields: [teamcodeid], references: [id])
+  teamcodeid Int?
+  pendingin  Teamcode? @relation("pendingcodes_relation", fields: [pendingteamcodeid], references: [id])
+  pendingteamcodeid Int?
+}
+
+
