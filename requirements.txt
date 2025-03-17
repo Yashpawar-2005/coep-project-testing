@@ -1,0 +1,9 @@
+ollama
+pandas
+numpy
+langchain
+matplotlib
+dotenv
+pinecone-client
+pinecone
+sqlglot
