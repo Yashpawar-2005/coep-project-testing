@@ -14,20 +14,21 @@ model User {
   email String @unique
   password String 
   teams Team[]
-  adminof Team? @relation("admin_relation")
+  adminof Team[]   @relation("admin_relation")
   tempcodes tempcodes[]
 }
 model Team{
   id Int @id @default(autoincrement())
   name String @unique
+  password String 
   members User[]
   admin   User? @relation("admin_relation", fields: [adminid], references: [id])
-  adminid Int? @unique
-  teamcodes Teamcode[]
+  adminid Int? 
+  teamcode    Teamcode? @relation("teamcode_relation")
 }
 model Teamcode{
   id              Int         @id @default(autoincrement())
-  team           Team        @relation(fields: [teamId], references: [id])
+  team           Team        @relation("teamcode_relation",fields: [teamId], references: [id])
   teamId         Int         @unique
   maincodes      tempcodes[] @relation("maincodes_relation")
   pendingcodes   tempcodes[] @relation("pendingcodes_relation")

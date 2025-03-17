@@ -133,4 +133,31 @@ const prompt_to_redis_handler = async (req, res) => {
   }
 };
 
-export { prompt_to_redis_handler };
+
+const submit_to_admin = async (req, res) => {
+  try {
+      const progress = req.body.progress;
+      const userId = req.userId;
+      const teamid = req.params.teamid;
+
+      if (!progress || !userId || !teamid) {
+          return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const prog = JSON.stringify(progress);
+
+      const data = await prisma.tempcodes.create({
+          data: {
+              userId: userId,
+              content: prog,
+              pendingteamcodeid:Number(teamid) 
+          },
+      });
+
+      res.status(201).json({ message: "Sent the request to the admin", data: data });
+  } catch (error) {
+      console.error("Error submitting to admin:", error);
+      res.status(500).json({ error: "Internal server error" });
+  }
+};
+export { prompt_to_redis_handler,submit_to_admin };

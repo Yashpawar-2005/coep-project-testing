@@ -1,0 +1,101 @@
+import { prisma } from "../db/Connect.js"
+export const create_room=async (req,res) => {
+    try {
+        const userid=req.userId
+        const roomname=req.body.room_name
+        const password=req.body.password
+        const find_room=await prisma.team.findFirst({
+            where:{
+                name:roomname
+            }
+        })
+        // console.log(userid)
+        if(find_room){
+         return    res.json({message:"room with the name alredy exists chose another"})
+        }
+        const room=await prisma.team.create({
+            data:{
+                name:roomname,
+                adminid:userid,
+                password:password
+            }
+        }) 
+        const teamcode = await prisma.teamcode.create({
+            data: {
+                teamId: room.id, 
+            },
+        });
+        await prisma.team.update({
+            where: { id: room.id },
+            data: {
+                teamcode: {
+                    connect: { id: teamcode.id },
+                },
+            },
+        });
+       return res.json({message:"room creted with name ",data:room})
+    } catch (error) {
+        res.status(500).json({ message: "Internal server error.", error: error.message });
+    } 
+}
+export const join_room=async (req,res) => {
+    try {
+    const userid=req.userId
+    const password=req.body.password
+    const roomname=req.body.room_name
+    const find_room=await prisma.team.findFirst({
+        where:{
+            name:roomname
+        },
+        include: {
+            members: true,
+        },
+    })
+    if(!find_room){
+       return  res.json({message:'no such room exists'})
+    }
+    if(find_room.password!=password){
+       return res.json({message:"password is wrong bkl"})
+    }
+    const user=await prisma.user.update({ 
+      where: { id: userid},
+      data: {
+        teams: {
+          connect: { id: find_room.id },
+        },
+    }
+    })
+    res.json({
+        message:"joined the room",
+        data:find_room
+    })
+} catch (error) {
+    res.status(500).json({ message: "Internal server error.", error: error.message });
+}
+}
+export const get_room_info=async (req,res) => {
+    try {
+        const roomid=req.params.roomid;
+        const id= parseInt(roomid)
+        if(id<=0){
+            res.json({message:'wrong params check again'})
+        }
+        const find_room=await prisma.team.findFirst({
+            where:{
+                id
+            },
+            include: { 
+                members: true,
+                teamcodes: {
+                    include: {
+                        maincodes: true,
+                        pendingcodes: true,
+                    },
+                },
+            },
+        })
+        res.json({data:find_room, message:"nice found one"})
+    } catch (error) {
+        res.status(500).json({ message: "Internal server error.", error: error.message });
+    }
+}
