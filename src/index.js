@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/authroute.js';
 import userRoutes from './routes/userroute.js';
 import teamrouter from './routes/teamroute.js';
+import adminrouter from './routes/adminroute.js';
 dotenv.config();
 const port = process.env.PORT || 3000;
 const app = express();
@@ -19,6 +20,7 @@ app.use(`${base_url}`,promptroute)
 app.use(`${base_url}/user`,userRoutes)
 app.use(`${base_url}/auth`,authRoutes)
 app.use(`${base_url}/team`,teamrouter)
+app.use(`${base_url}/admin`,adminrouter)
 app.get('/', async (req, res) => {
   try {
     const users = await prisma.user.findMany();
