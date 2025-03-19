@@ -66,3 +66,9 @@ export const useUserStore = create((set) => ({
 
   setuser: (user) => set({ user }),
 }));
+
+
+export const useTeamStore=create((set)=>({
+  teamdata:null,
+setteamdata:(data)=>set({teamdata:data}),
+}))
