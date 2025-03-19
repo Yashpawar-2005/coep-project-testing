@@ -30,7 +30,7 @@ const movePendingToMain = async (req, res) => {
         const userid = req.userId; 
         const pendingcode = await prisma.tempcodes.findUnique({
             where: { id: pendingcodeId },
-        });
+        })
 
         if (!pendingcode) {
             return res.status(404).json({ message: "Pending code not found." });

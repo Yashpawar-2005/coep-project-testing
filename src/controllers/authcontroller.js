@@ -27,7 +27,7 @@ export const register = async (req, res) => {
     const token = generateToken(user);
     res.cookie('token', token, { httpOnly: true, secure: false });
 
-    res.status(201).json({ message: 'User created', user });
+    res.status(201).json({ message: 'User created', data:user });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -45,7 +45,7 @@ export const login = async (req, res) => {
     const token = generateToken(user);
     res.cookie('token', token, { httpOnly: true, secure: false });
 
-    res.json({ message: 'Login successful', user });
+    res.json({ message: 'Login successful', data:user });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }

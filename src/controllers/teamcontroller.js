@@ -1,9 +1,53 @@
 import { prisma } from "../db/Connect.js"
+
+export const get_rooms=async (req,res) => {
+    try {
+        const userid=req.userId;
+        const created_room=await prisma.team.findMany({
+            where:{
+                adminid:userid
+            }, 
+            include: {
+                _count: {
+                  select: { members: true }, // Get the member count
+                },
+              },
+        })
+        const joined_room=await prisma.team.findMany({
+            where: {
+                members: {
+                    some: {
+                        id: userid,
+                    },
+                },
+                adminid: {
+                    not: userid,
+                },
+            },
+            include: {
+              _count: {
+                select: { members: true }, // Get the member count
+              },
+            },
+        });
+        res.json({
+            created_room,
+            joined_room
+        });
+    } catch (error) { 
+        console.log(error)
+        res.status(500).json({message:"wrong something"})
+    }
+}
 export const create_room=async (req,res) => {
     try {
         const userid=req.userId
-        const roomname=req.body.room_name
-        const password=req.body.password
+        const roomname=req.body.newTeam.teamName
+        const password=req.body.newTeam.password
+        const discription=req.body.newTeam.description
+        console.log(roomname)
+        console.log(password)
+        console.log(discription)
         const find_room=await prisma.team.findFirst({
             where:{
                 name:roomname
@@ -17,7 +61,8 @@ export const create_room=async (req,res) => {
             data:{
                 name:roomname,
                 adminid:userid,
-                password:password
+                password:password,
+                discription:discription
             }
         }) 
         const teamcode = await prisma.teamcode.create({
@@ -41,8 +86,9 @@ export const create_room=async (req,res) => {
 export const join_room=async (req,res) => {
     try {
     const userid=req.userId
-    const password=req.body.password
-    const roomname=req.body.room_name
+    const password=req.body.teamData.password
+    const roomname=req.body.teamData.teamName
+    
     const find_room=await prisma.team.findFirst({
         where:{
             name:roomname
@@ -54,6 +100,8 @@ export const join_room=async (req,res) => {
     if(!find_room){
        return  res.json({message:'no such room exists'})
     }
+    console.log(password)
+    console.log(find_room)
     if(find_room.password!=password){
        return res.json({message:"password is wrong bkl"})
     }
@@ -99,4 +147,4 @@ export const get_room_info=async (req,res) => {
     } catch (error) {
         res.status(500).json({ message: "Internal server error.", error: error.message });
     }
-}
+}         

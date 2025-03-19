@@ -13,7 +13,11 @@ const port = process.env.PORT || 3000;
 const app = express();
 await connectDatabases();
 const base_url="/api/v1"
-app.use(cors());
+
+app.use(cors({
+  origin: 'http://localhost:5173',           
+  credentials: true,        
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use(`${base_url}`,promptroute)
