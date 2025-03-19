@@ -44,6 +44,7 @@ model tempcodes{
   mainteamcodeid Int?
   pendingin  Teamcode? @relation("pendingcodes_relation", fields: [pendingteamcodeid], references: [id])
   pendingteamcodeid Int?
+  createdAt DateTime @default(now())
 }
 
 

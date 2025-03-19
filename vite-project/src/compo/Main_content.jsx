@@ -1,249 +1,287 @@
-import React, { useState, useEffect } from 'react';
-import MessageList from './MessageList';
-import InputArea from './InputArea';
-import { useTeamStore } from '@/services/atom';
-
-// Import the LoadingState component
-function LoadingState() {
-  return (
-    <div className="flex-1 flex items-center justify-center bg-black text-white">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-16 h-16 rounded-full bg-indigo-900/30 flex items-center justify-center">
-          {/* <Loader2 className="animate-spin text-indigo-500" size={32} /> */}
-        </div>
-        <span className="text-gray-400 font-medium">Loading conversation history...</span>
-      </div>
-    </div>
-  );
-}
-
-// ErrorState component
-function ErrorState({ loadingError, loadChats }) {
-  return (
-    <div className="flex-1 flex items-center justify-center bg-black text-white">
-      <div className="flex flex-col items-center gap-4 max-w-md text-center p-6">
-        <div className="w-16 h-16 rounded-full bg-red-900/30 flex items-center justify-center">
-          <RefreshCw className="text-red-500" size={32} />
-        </div>
-        <h3 className="text-xl font-semibold text-white">Failed to load messages</h3>
-        <p className="text-gray-400">{loadingError || "Something went wrong while fetching your conversation."}</p>
-        <button 
-          onClick={loadChats} 
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center gap-2"
-        >
-          <RefreshCw size={16} />
-          Try Again
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Mock user data - in a real app, this would come from authentication service
-const mockUsers = {
-  5: { id: 5, username: "User 5", avatar: null },
-  7: { id: 7, username: "User 7", avatar: null },
-  "current-user": { id: "current-user", username: "You", avatar: null }
-};
-
-// Modified functions to work with the maincodes data structure
-export async function fetchCurrentUser() {
-  try {
-    return mockUsers["current-user"];
-  } catch (error) {
-    console.error("Failed to load user data:", error);
-    return mockUsers["current-user"];
-  }
-}
-
-export async function loadChats() {
-  try {
-    const messages = [];
-    
-    const maincodes = [
-      {
-        id: 14,
-        content: '[{"prompt":"What is your name?","responce":"I am ChatGPT."},{"prompt":"What do you do?","responce":"I assist with various tasks."}]',
-        userId: 5,
-        mainteamcodeid: 18,
-        pendingteamcodeid: null
-      },
-      {
-        id: 15,
-        content: '[{"prompt":"How is the weather?","responce":"It is sunny."},{"prompt":"What time is it?","responce":"It is 10:00 AM."}]',
-        userId: 7,
-        mainteamcodeid: 19,
-        pendingteamcodeid: null
-      }
-    ];
-    
-    maincodes.forEach(code => {
-      const parsedContent = JSON.parse(code.content);
-      parsedContent.forEach((exchange, index) => {
-        messages.push({
-          id: `${code.id}-prompt-${index}`,
-          content: exchange.prompt,
-          isUser: true,
-          username: mockUsers[code.userId]?.username || `User ${code.userId}`,
-          userId: code.userId,
-          avatar: mockUsers[code.userId]?.avatar,
-          timestamp: new Date(Date.now() - (parsedContent.length - index) * 60000) 
-        });
-        messages.push({
-          id: `${code.id}-response-${index}`,
-          content: exchange.responce,
-          isUser: false,
-          username: "Assistant",
-          timestamp: new Date(Date.now() - (parsedContent.length - index) * 60000 + 30000)
-        });
-      });
-    });
-    
-    // Sort messages by timestamp
-    return messages.sort((a, b) => a.timestamp - b.timestamp);
-  } catch (error) {
-    console.error("Failed to load chats:", error);
-    throw error;
-  }
-}
-
-export async function sendMessage(content) {
-  try {
-    // In a real app, this would send the message to a backend
-    return {
-      content: `I received your message: "${content}". This is a mock response.`,
-      username: "Assistant",
-      timestamp: new Date()
-    };
-  } catch (error) {
-    console.error("Failed to send message:", error);
-    return {
-      content: "I'm having trouble connecting to the server. Please try again later.",
-      username: "Assistant",
-      timestamp: new Date()
-    };
-  }
-}
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import { useTeamStore, useUserStore } from '@/services/atom'; // Adjust path as needed
+import { api } from '@/services/axios';
 
 export default function MainContent() {
+  const [chatData, setChatData] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadingError, setLoadingError] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
-  const { teamdata } = useTeamStore();
-
+  const [isTyping, setIsTyping] = useState(false);
+  const { user } = useUserStore();
+  const messagesEndRef = useRef(null);
+  const {teamdata}=useTeamStore();
+  // Fetch chat data from backend
   useEffect(() => {
-    const initializeChat = async () => {
+    const fetchChats = async () => {
       try {
-        const user = await fetchCurrentUser();
-        setCurrentUser(user);
-        
-        const chatHistory = await loadChats();
-        setMessages(chatHistory);
+        console.log(teamdata.data.maincodes)
+        setChatData(teamdata.data);
+        const processedMessages = processMaincodes(teamdata.data.maincodes);
+        setMessages(processedMessages);
       } catch (error) {
-        console.error("Failed to initialize chat:", error);
-        setLoadingError(error.message);
+        console.error("Failed to fetch chats:", error);
       } finally {
         setIsLoading(false);
       }
     };
     
-    initializeChat();
+    fetchChats();
   }, []);
+
+  // Process maincodes into a flat array of messages
+  const processMaincodes = (maincodes) => {
+    const allMessages = [];
+    
+    maincodes.forEach(code => {
+      try {
+        const parsedContent = JSON.parse(code.content);
+        
+        parsedContent.forEach((exchange, index) => {
+          // Add user message
+          allMessages.push({
+            id: `${code.id}-prompt-${index}`,
+            content: exchange.prompt,
+            isUser: true,
+            userId: code.userId,
+            timestamp: new Date(code.createdAt)
+          });
+          
+          // Add response message
+          allMessages.push({
+            id: `${code.id}-response-${index}`,
+            content: exchange.responce,
+            isUser: false,
+            username: "Assistant",
+            timestamp: new Date(code.createdAt)
+          });
+        });
+      } catch (error) {
+        console.error(`Error parsing content for code ${code.id}:`, error);
+      }
+    });
+    
+    // Sort messages by timestamp
+    return allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  };
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
-
+    
     const userMessage = {
-      id: Date.now(),
+      id: `user-${Date.now()}`,
       content: input,
       isUser: true,
-      username: currentUser?.username || "You",
-      userId: currentUser?.id || "current-user",
-      avatar: currentUser?.avatar,
+      userId: user?.data?.id,
       timestamp: new Date()
     };
-
+    
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsTyping(true);
-
+    
     try {
-      // In a production app, we would save this to the maincodes structure
-      const response = await sendMessage(input);
-
-      const botResponse = {
-        id: Date.now() + 1,
-        content: response.content,
-        isUser: false,
-        username: response.username || "Assistant",
-        timestamp: new Date(response.timestamp) || new Date()
+      // Format the request body according to what your backend expects
+      const requestBody = {
+        prompt: input
       };
-
-      setMessages((prev) => [...prev, botResponse]);
+      
+      // Use fetch for streaming support with credentials included
+      const response = await fetch('http://localhost:3000/api/v1/generate_output', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        credentials: 'include' // Add credentials to include cookies in the request
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      
+      // For streaming response
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let fullResponse = '';
+      
+      // Create a temporary message for streaming updates
+      const tempBotResponseId = `assistant-${Date.now()}`;
+      setMessages((prev) => [...prev, {
+        id: tempBotResponseId,
+        content: '',
+        isUser: false,
+        username: "Assistant",
+        timestamp: new Date()
+      }]);
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        fullResponse += chunk;
+        
+        // Update the message with the current stream
+        setMessages((prev) =>
+          prev.map(msg =>
+            msg.id === tempBotResponseId
+              ? { ...msg, content: fullResponse }
+              : msg
+          )
+        );
+      }
+      
+      // Once streaming is complete, finalize the message
+      setMessages((prev) =>
+        prev.map(msg =>
+          msg.id === tempBotResponseId
+            ? {
+                ...msg,
+                content: fullResponse,
+                id: `assistant-final-${Date.now()}`
+              }
+            : msg
+        )
+      );
+      
     } catch (error) {
-      console.error("Error handling message:", error);
-
+      console.error("Error sending message:", error);
+      
       const errorResponse = {
-        id: Date.now() + 1,
+        id: `error-${Date.now()}`,
         content: "Sorry, I encountered an error processing your request. Please try again.",
         isUser: false,
         username: "Assistant",
         timestamp: new Date()
       };
-
+      
       setMessages((prev) => [...prev, errorResponse]);
     } finally {
       setIsTyping(false);
     }
   };
 
-  const refreshChats = async () => {
-    setIsLoading(true);
-    setLoadingError(null);
-
-    try {
-      const chatHistory = await loadChats();
-      setMessages(chatHistory);
-    } catch (error) {
-      console.error("Failed to reload chats:", error);
-      setLoadingError(error.message);
-    } finally {
-      setIsLoading(false);
+  const getUserName = (userId) => {
+    // If current user, use their name
+    if (user?.data?.id === userId) {
+      return user.data.name || `User ${userId}`;
     }
+    
+    // Otherwise try to find the user in the chat data
+    if (chatData?.data?.maincodes) {
+      const maincode = chatData.data.maincodes.find(code => code.userId === userId);
+      if (maincode) {
+        return `User ${userId}`; 
+      }
+    }
+    
+    return `User ${userId}`;
   };
 
   if (isLoading) {
-    return <LoadingState />;
-  }
-
-  if (loadingError) {
-    return <ErrorState loadingError={loadingError} loadChats={refreshChats} />;
+    return (
+      <div className="flex-1 flex items-center justify-center bg-black text-white">
+        <p>Loading chat history...</p>
+      </div>
+    );
   }
 
   return (
     <div className="flex-1 flex flex-col bg-black text-white">
       <div className="border-b border-gray-800 p-4">
         <h2 className="text-xl font-semibold text-center text-white">
-          {teamdata?.data?.name || "Chat Interface"}
+          {chatData?.name || "Chat"}
         </h2>
       </div>
       
-      <MessageList 
-        messages={messages} 
-        isTyping={isTyping} 
-        currentUser={currentUser} 
-      />
+      {/* Message list */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {messages.length === 0 ? (
+          <div className="text-center text-gray-500 mt-8">
+            <p>No messages yet. Start a conversation!</p>
+          </div>
+        ) : (
+          messages.map((message) => (
+            <div 
+              key={message.id}
+              className={`mb-4 ${message.isUser ? 'text-right' : 'text-left'}`}
+            >
+              <div className="flex items-center mb-1">
+                {!message.isUser && (
+                  <div className="bg-blue-600 rounded-full h-8 w-8 flex items-center justify-center mr-2">
+                    <span className="text-xs font-bold">AI</span>
+                  </div>
+                )}
+                <span className="text-gray-400 text-sm">
+                  {message.isUser 
+                    ? getUserName(message.userId)
+                    : message.username} • {new Date(message.timestamp).toLocaleTimeString()}
+                </span>
+                {message.isUser && user?.data?.id === message.userId && (
+                  <div className="ml-2">
+                    <div className="bg-green-600 rounded-full h-8 w-8 flex items-center justify-center">
+                      <span className="text-xs font-bold">
+                        {user.data.name.substring(0, 2).toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div 
+                className={`p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg inline-block ${
+                  message.isUser 
+                    ? 'bg-blue-700 text-white' 
+                    : 'bg-gray-800 text-white'
+                }`}
+              >
+                {message.content}
+              </div>
+            </div>
+          ))
+        )}
+        {isTyping && (
+          <div className="text-left mb-4">
+            <div className="flex items-center mb-1">
+              <div className="bg-blue-600 rounded-full h-8 w-8 flex items-center justify-center mr-2">
+                <span className="text-xs font-bold">AI</span>
+              </div>
+              <span className="text-gray-400 text-sm">Assistant is typing...</span>
+            </div>
+            <div className="p-3 rounded-lg bg-gray-800 text-white inline-block">
+              <span className="typing-indicator">...</span>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
       
-      <InputArea 
-        input={input} 
-        setInput={setInput} 
-        handleSubmit={handleSubmit} 
-        isTyping={isTyping} 
-      />
+      {/* Input area */}
+      <div className="border-t border-gray-800 p-4">
+        <form onSubmit={handleSubmit} className="flex">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type your message..."
+            className="flex-1 p-2 rounded-l-lg bg-gray-800 text-white focus:outline-none"
+            disabled={isTyping}
+          />
+          <button
+            type="submit"
+            className="bg-blue-600 text-white px-4 py-2 rounded-r-lg hover:bg-blue-700 focus:outline-none disabled:opacity-50"
+            disabled={isTyping || !input.trim()}
+          >
+            Send
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

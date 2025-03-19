@@ -134,7 +134,6 @@ export const get_room_info=async (req,res) => {
                 id
             },
             include: { 
-                members: true,
                 teamcode: {
                     include: {
                         maincodes: true,
@@ -143,7 +142,8 @@ export const get_room_info=async (req,res) => {
                 },
             },
         })
-        res.json({data:find_room, message:"nice found one"})
+        // console.log(find_room.teamcode.maincodes)
+        res.json({data:find_room.teamcode,name:find_room.name, message:"nice found one"})
     } catch (error) {
         res.status(500).json({ message: "Internal server error.", error: error.message });
     }

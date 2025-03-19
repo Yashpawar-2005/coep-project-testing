@@ -25,7 +25,6 @@ export function TeamList({ teams, emptyMessage, dateLabel, showManage }) {
 function TeamCard({ team, dateLabel, showManage }) {
   const date = (team.joinedAt || team.createdAt)?.split('T')[0];
   console.log(team)
-  // console.log(team._count.members+1)
   return (
     <Card className="overflow-hidden transition-all hover:shadow-md">
       <CardHeader className="pb-2">
