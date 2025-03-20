@@ -45,18 +45,18 @@ const movePendingToMain = async (req, res) => {
         }
 
         // Check if the user has permission
-        const teamcode = await prisma.teamcode.findFirst({
-            where: {
-                id: pendingcode.pendingteamcodeid,
-                team: {
-                    members: { some: { id: userid } },
-                },
-            },
-        });
+        // const teamcode = await prisma.teamcode.findFirst({
+        //     where: {
+        //         id: pendingcode.pendingteamcodeid,
+        //         team: {
+        //             members: { some: { id: userid } },
+        //         },
+        //     },
+        // });
 
-        if (!teamcode) {
-            return res.status(403).json({ message: "You do not have permission to move this code." });
-        }
+        // if (!teamcode) {
+        //     return res.status(403).json({ message: "You do not have permission to move this code." });
+        // }
 
         // Update the code: mark as non-pending but keep the relation
         const updatedCode = await prisma.tempcodes.update({
@@ -65,7 +65,6 @@ const movePendingToMain = async (req, res) => {
                 ispending: false,  // Mark as main code but keep relation
             },
         });
-
         return res.status(200).json({
             message: "Pending code moved to main codes successfully while maintaining the relation.",
             data: updatedCode,
