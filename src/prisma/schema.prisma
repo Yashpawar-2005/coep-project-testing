@@ -44,6 +44,9 @@ model tempcodes{
   mainteamcodeid Int?
   pendingin  Teamcode? @relation("pendingcodes_relation", fields: [pendingteamcodeid], references: [id])
   pendingteamcodeid Int?
+  type String?
+  description String?
+  title String?
   createdAt DateTime @default(now())
 }
 

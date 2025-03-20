@@ -12,33 +12,17 @@ export default function AppLayout() {
   const [loading, setLoading] = useState(true);
   const { setteamdata } = useTeamStore();
   const { id } = useParams();
-
-  useEffect(() => {
-    const fetchTeamData = async () => {
-      if (!id) return;
-      try {
-        const response = await api.get(`/team/getinfo/${id}`);
-        setteamdata(response.data);
-      } catch (error) {
-        console.error("Error fetching team info:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTeamData();
-  }, [id, setteamdata]);
-
-  if (!id || loading) {
-    return <div className="flex h-screen bg-gray-950 text-white justify-center items-center">Loading...</div>;
-  }
+  const [admindata,setadminkadata]=useState([])
+  // if (!id || loading) {
+  //   return <div className="flex h-screen bg-gray-950 text-white justify-center items-center">Loading...</div>;
+  // }
 
   return (
     <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
       <div className="md:block">
-        <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
+        <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} admindata={admindata} />
       </div>
-      <MainContent />
+      <MainContent setadminkadata={setadminkadata} />
     </div>
   );
 }

@@ -72,3 +72,8 @@ export const useTeamStore=create((set)=>({
   teamdata:null,
 setteamdata:(data)=>set({teamdata:data}),
 }))
+
+export const useSendtoAdmin=create((set)=>({
+  dataforadmin:null,
+  setadmindata:(data)=>set({dataforadmin:data}),
+}))

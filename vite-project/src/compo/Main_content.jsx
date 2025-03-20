@@ -1,38 +1,67 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { useTeamStore, useUserStore } from '@/services/atom'; // Adjust path as needed
+import { useSendtoAdmin, useTeamStore, useUserStore } from '@/services/atom'; // Adjust path as needed
 import { api } from '@/services/axios';
+import { useParams } from 'react-router-dom';
 
-export default function MainContent() {
+export default function MainContent({setadminkadata}) {
   const [chatData, setChatData] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const { user } = useUserStore();
   const messagesEndRef = useRef(null);
+  // const {setadmindata}=useSendtoAdmin();
   const {teamdata}=useTeamStore();
-  // Fetch chat data from backend
+  const {id}=useParams();
+
+  // Reset state when id changes
   useEffect(() => {
+    setIsLoading(true); 
     const fetchChats = async () => {
       try {
-        console.log(teamdata.data.maincodes)
-        setChatData(teamdata.data);
-        const processedMessages = processMaincodes(teamdata.data.maincodes);
-        setMessages(processedMessages);
+        console.log("User:", user);
+        console.log("Team ID:", id);
+
+        if (id) {
+          const response = await api.get(`/team/getinfo/${id}`);
+          console.log("API Response:", response);
+
+          // ✅ Correctly updating chatData
+          console.log(response.data)
+          setChatData(response.data);
+
+          // ✅ Processing messages if maincodes exist
+          if (response.data?.data?.maincodes) {
+            const processedMessages = processMaincodes(response.data.data.maincodes);
+            setMessages(processedMessages);
+          } else {
+            setMessages([]); // Clear if no maincodes found
+          }
+        }
       } catch (error) {
         console.error("Failed to fetch chats:", error);
       } finally {
-        setIsLoading(false);
+        // Ensure loader visibility for at least 500ms
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 500);
       }
     };
-    
+
     fetchChats();
-  }, []);
+  }, [id]);// Dependencies include id to react to route changes
 
   // Process maincodes into a flat array of messages
   const processMaincodes = (maincodes) => {
     const allMessages = [];
+    
+    if (!Array.isArray(maincodes)) {
+      console.error("maincodes is not an array:", maincodes);
+      return [];
+    }
     
     maincodes.forEach(code => {
       try {
@@ -82,9 +111,14 @@ export default function MainContent() {
       timestamp: new Date()
     };
     
+    // Store the current prompt to pair with response later
+    const currentPromptText = input;
+    
+    // Add message to UI
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsTyping(true);
+    setIsSending(true);
     
     try {
       // Format the request body according to what your backend expects
@@ -151,6 +185,15 @@ export default function MainContent() {
         )
       );
       
+      // Add the completed prompt-response pair to admin data in the desired format
+      setadminkadata((prev) => [
+        ...prev,
+        {
+          prompt: currentPromptText,
+          responce: fullResponse
+        }
+      ]);
+      
     } catch (error) {
       console.error("Error sending message:", error);
       
@@ -163,11 +206,21 @@ export default function MainContent() {
       };
       
       setMessages((prev) => [...prev, errorResponse]);
+      
+      // Add error response to admin data
+      setadminkadata((prev) => [
+        ...prev,
+        {
+          prompt: currentPromptText,
+          responce: "Error: Failed to get response"
+        }
+      ]);
+      
     } finally {
       setIsTyping(false);
+      setIsSending(false);
     }
   };
-
   const getUserName = (userId) => {
     // If current user, use their name
     if (user?.data?.id === userId) {
@@ -185,10 +238,37 @@ export default function MainContent() {
     return `User ${userId}`;
   };
 
+  // Enhanced loading spinner component
+  const LoadingSpinner = () => (
+    <div className="flex flex-col items-center justify-center h-full">
+      <div className="relative">
+        {/* Outer ring */}
+        <div className="absolute inset-0 rounded-full h-16 w-16 border-4 border-blue-300 opacity-25"></div>
+        
+        {/* Inner spinning ring */}
+        <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent"></div>
+        
+        {/* Pulsing center dot */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="h-4 w-4 bg-blue-600 rounded-full animate-pulse"></div>
+        </div>
+      </div>
+      
+      {/* Text with subtle animation */}
+      <div className="mt-6 text-center">
+        <p className="text-blue-400 font-medium">Loading</p>
+        <div className="flex justify-center mt-1 space-x-1">
+          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0s'}}></div>
+          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+        </div>
+      </div>
+    </div>
+  );
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-black text-white">
-        <p>Loading chat history...</p>
+      <div className="flex-1 flex items-center justify-center bg-black text-white h-full">
+        <LoadingSpinner />
       </div>
     );
   }
@@ -197,7 +277,7 @@ export default function MainContent() {
     <div className="flex-1 flex flex-col bg-black text-white">
       <div className="border-b border-gray-800 p-4">
         <h2 className="text-xl font-semibold text-center text-white">
-          {chatData?.name || "Chat"}
+          {chatData?.name || `Chat #${id}`}
         </h2>
       </div>
       
@@ -213,7 +293,7 @@ export default function MainContent() {
               key={message.id}
               className={`mb-4 ${message.isUser ? 'text-right' : 'text-left'}`}
             >
-              <div className="flex items-center mb-1">
+              <div className={`flex items-center mb-1 ${message.isUser ? 'justify-end' : 'justify-start'}`}>
                 {!message.isUser && (
                   <div className="bg-blue-600 rounded-full h-8 w-8 flex items-center justify-center mr-2">
                     <span className="text-xs font-bold">AI</span>
@@ -228,7 +308,7 @@ export default function MainContent() {
                   <div className="ml-2">
                     <div className="bg-green-600 rounded-full h-8 w-8 flex items-center justify-center">
                       <span className="text-xs font-bold">
-                        {user.data.name.substring(0, 2).toUpperCase()}
+                        {user?.data?.name ? user.data.name.substring(0, 2).toUpperCase() : "U"}
                       </span>
                     </div>
                   </div>
@@ -255,7 +335,11 @@ export default function MainContent() {
               <span className="text-gray-400 text-sm">Assistant is typing...</span>
             </div>
             <div className="p-3 rounded-lg bg-gray-800 text-white inline-block">
-              <span className="typing-indicator">...</span>
+              <div className="flex space-x-1">
+                <div className="h-2 w-2 bg-gray-500 rounded-full animate-bounce"></div>
+                <div className="h-2 w-2 bg-gray-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                <div className="h-2 w-2 bg-gray-500 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+              </div>
             </div>
           </div>
         )}
@@ -275,13 +359,17 @@ export default function MainContent() {
           />
           <button
             type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded-r-lg hover:bg-blue-700 focus:outline-none disabled:opacity-50"
+            className="bg-blue-600 text-white px-4 py-2 rounded-r-lg hover:bg-blue-700 focus:outline-none disabled:opacity-50 flex items-center justify-center min-w-20"
             disabled={isTyping || !input.trim()}
           >
-            Send
+            {isSending ? (
+              <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              "Send"
+            )}
           </button>
         </form>
       </div>
     </div>
   );
-}
+} 

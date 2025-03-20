@@ -1,6 +1,6 @@
 "use client"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Link } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { 
   Tooltip, 
@@ -22,12 +22,15 @@ import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { useState, useEffect } from "react"
-import { useUserStore } from "@/services/atom"
+import { useSendtoAdmin, useUserStore } from "@/services/atom"
+import SendToAdminButton from "./Sendtoadmin"
 
-export function Sidebar({ isCollapsed: externalIsCollapsed, setIsCollapsed: externalSetIsCollapsed }) {
+export function Sidebar({ isCollapsed: externalIsCollapsed, setIsCollapsed: externalSetIsCollapsed,admindata }) {
   const [teams, setTeams] = useState([]); // Ensure teams is an array
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(externalIsCollapsed || false);
   const { user } = useUserStore();
+  const {dataforadmin}=useSendtoAdmin();
+  const {id}=useParams();
 
   useEffect(() => {
     const fetchTeams = async () => {
@@ -55,13 +58,21 @@ export function Sidebar({ isCollapsed: externalIsCollapsed, setIsCollapsed: exte
       externalSetIsCollapsed(newState);
     }
   };
-
+const handlesendtoadmin=async () => {
+  try {
+    console.log(admindata)
+    const response=await api.post(`/submit_to_admin/${id}`,{"progress":[admindata]})
+    console.log(response)
+  } catch (error) {
+    console.log(error)
+  }
+}
   const isCollapsed = internalIsCollapsed;
 
   return (
     <div
       className={cn(
-        "bg-black text-gray-200 transition-all duration-300 border-r border-gray-800 flex-shrink-0 h-screen",
+        "bg-black text-gray-200 transition-all duration-300 border-r border-gray-800 flex-shrink-0 h-screen mt-1",
         isCollapsed ? "w-16" : "w-64 md:w-72",
       )}
     >
@@ -208,25 +219,7 @@ export function Sidebar({ isCollapsed: externalIsCollapsed, setIsCollapsed: exte
               </Tooltip>
             </TooltipProvider>
 
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className={cn(
-                      "w-full justify-start px-2 py-2 h-auto rounded-lg hover:bg-gray-900 transition-colors text-gray-300 hover:text-white",
-                      isCollapsed && "justify-center"
-                    )}
-                  >
-                    <div className="flex items-center justify-center w-8 h-8 rounded-md bg-gray-900 text-purple-400">
-                      <Send size={16} />
-                    </div>
-                    {!isCollapsed && <span className="ml-3 text-sm font-medium truncate">Send to Admin</span>}
-                  </Button>
-                </TooltipTrigger>
-                {isCollapsed && <TooltipContent side="right" className="bg-gray-900 text-white border-gray-800">Send to Admin</TooltipContent>}
-              </Tooltip>
-            </TooltipProvider>
+            <SendToAdminButton admindata={admindata}/>
 
             <TooltipProvider delayDuration={300}>
               <Tooltip>
