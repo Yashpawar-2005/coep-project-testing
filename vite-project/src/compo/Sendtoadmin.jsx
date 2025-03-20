@@ -16,7 +16,7 @@ const SqlSubmissionForm = ({admindata}) => {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({
-    type: 'query', // Default type
+    type: 'query', 
     title: '',
     description: ''
   });
@@ -54,8 +54,6 @@ const SqlSubmissionForm = ({admindata}) => {
         description: "Your contribution has been sent to the admin for review.",
         variant: "default"
       });
-      
-      // Reset after 2 seconds
       setTimeout(() => {
         setSuccess(false);
         setFormData({

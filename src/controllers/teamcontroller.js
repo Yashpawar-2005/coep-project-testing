@@ -26,7 +26,7 @@ export const get_rooms=async (req,res) => {
             },
             include: {
               _count: {
-                select: { members: true }, // Get the member count
+                select: { members: true }, 
               },
             },
         });
@@ -136,15 +136,38 @@ export const get_room_info=async (req,res) => {
             include: { 
                 teamcode: {
                     include: {
-                        maincodes: true,
-                        pendingcodes: true,
+                        pendingcodes: {
+                            where:{
+                                ispending:false
+                            }
+                        }
                     },
                 },
             },
         })
-        // console.log(find_room.teamcode.maincodes)
         res.json({data:find_room.teamcode,name:find_room.name, message:"nice found one"})
     } catch (error) {
         res.status(500).json({ message: "Internal server error.", error: error.message });
     }
-}         
+} 
+export const get_all_rooms_info=async (req,res) => {
+    try {
+        const {id}=req.params;
+        const teamid=parseInt(id)
+        const userid=req.userId;
+       const data=await prisma.team.findMany({
+            where:{
+                id:teamid
+            },
+            // include:{
+            //     teamcode:{
+            //         pendingcodes:true
+            //     }
+            // }
+        })
+        res.status(200).json({message:"got the answer",data:data})
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({messag:"interal server error",error:error.message})
+    }
+}

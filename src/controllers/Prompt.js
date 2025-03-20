@@ -149,7 +149,7 @@ const submit_to_admin = async (req, res) => {
     if (!progress || !userId || !teamid) {
       return res.status(400).json({ error: "Missing required fields" });
     }
-
+    // console.log(progress[0].title)
     const team = await prisma.team.findFirst({
       where: { id: Number(teamid) },
       include: { teamcode: true },
@@ -159,19 +159,21 @@ const submit_to_admin = async (req, res) => {
       return res.status(404).json({ error: "Team not found" });
     }
 
-    for (const item of progress) {
-      const prog = JSON.stringify(item.content);
+    // for (const item of progress) {
+      const prog = JSON.stringify(progress[0].content);
 
       await prisma.tempcodes.create({
         data: {
           userId: userId,
           content: prog,
-          description: item.description,
-          title: item.title,
+          description: progress[0].description,
+          type:progress[0].type,
+          title: progress[0].title,
           pendingteamcodeid: team.teamcode.id,
+          ispending:true,
         },
       });
-    }
+    // }
 
     res.status(201).json({ message: "Sent the request to the admin" });
   } catch (error) {

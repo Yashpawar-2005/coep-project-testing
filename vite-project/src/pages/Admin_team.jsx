@@ -1,11 +1,14 @@
-  import React, { useState } from 'react';
+  import React, { useState,useEffect } from 'react';
   import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
   import { Button } from '@/components/ui/button';
   import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
   import { Badge } from '@/components/ui/badge';
   import { Check, Eye, Code, GitMerge, Database, FileCode } from 'lucide-react';
+import { api } from '@/services/axios';
+import { useParams } from 'react-router-dom';
 
   const SQLContributionsAdmin = () => {
+    const {id}=useParams()
     // Sample data - in a real app, this would come from an API
     const [contributions, setContributions] = useState([
       {
@@ -54,15 +57,25 @@
         ]
       }
     ]);
-
+    useEffect(() => {
+      const myfunct=async () => {
+        const data=await api(`/team/get_all_teams/${id}`)
+        console.log(data)
+      }
+      if(id){
+        myfunct()
+      }
+    }, [id])
+    
     const [selectedContribution, setSelectedContribution] = useState(null);
     const [activeTab, setActiveTab] = useState("all");
 
     // Function to handle accepting a contribution
-    const handleAccept = (id) => {
+    const handleAccept =async (id) => {
       setContributions(contributions.map(contrib => 
         contrib.id === id ? {...contrib, status: "accepted"} : contrib
       ));
+      
       
       // In a real application, you would make an API call here to merge the SQL into the database
       console.log(`SQL Contribution ${id} accepted and merged into main database`);

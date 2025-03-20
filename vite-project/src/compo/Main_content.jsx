@@ -24,21 +24,31 @@ export default function MainContent({setadminkadata}) {
       try {
         console.log("User:", user);
         console.log("Team ID:", id);
-
+  
         if (id) {
           const response = await api.get(`/team/getinfo/${id}`);
           console.log("API Response:", response);
-
-          // ✅ Correctly updating chatData
-          console.log(response.data)
+  
+          // Set the chat data
           setChatData(response.data);
-
-          // ✅ Processing messages if maincodes exist
-          if (response.data?.data?.maincodes) {
-            const processedMessages = processMaincodes(response.data.data.maincodes);
+          
+          // Determine which array to process (maincodes or pendingcodes)
+          let codesToProcess = null;
+          
+          if (response.data?.data?.maincodes && response.data.data.maincodes.length > 0) {
+            console.log("Found maincodes:", response.data.data.maincodes);
+            codesToProcess = response.data.data.maincodes;
+          } else if (response.data?.data?.pendingcodes && response.data.data.pendingcodes.length > 0) {
+            console.log("Found pendingcodes:", response.data.data.pendingcodes);
+            codesToProcess = response.data.data.pendingcodes;
+          }
+          
+          if (codesToProcess) {
+            const processedMessages = processMaincodes(codesToProcess);
             setMessages(processedMessages);
           } else {
-            setMessages([]); // Clear if no maincodes found
+            console.log("No codes found to process");
+            setMessages([]); // Clear if no codes found
           }
         }
       } catch (error) {
@@ -50,50 +60,68 @@ export default function MainContent({setadminkadata}) {
         }, 500);
       }
     };
-
+  
     fetchChats();
-  }, [id]);// Dependencies include id to react to route changes
+  }, [id]); // Dependencies include id to react to route changes // Dependencies include id to react to route changes
 
   // Process maincodes into a flat array of messages
   const processMaincodes = (maincodes) => {
     const allMessages = [];
-    
+  
     if (!Array.isArray(maincodes)) {
       console.error("maincodes is not an array:", maincodes);
       return [];
     }
     
-    maincodes.forEach(code => {
+    console.log("Processing maincodes:", maincodes);
+  
+    maincodes.forEach((code) => {
       try {
-        const parsedContent = JSON.parse(code.content);
+        // Get the content string
+        let contentStr = code.content;
         
+        // Handle case where content starts with "null " (remove the "null " prefix)
+        if (typeof contentStr === "string" && contentStr.startsWith("null ")) {
+          contentStr = contentStr.substring(5); // Remove "null " prefix
+        }
+        
+        // Parse the JSON content
+        const parsedContent = typeof contentStr === "string" ? JSON.parse(contentStr) : contentStr;
+  
+        if (!Array.isArray(parsedContent)) {
+          console.error(`Invalid content format for code ${code.id}:`, parsedContent);
+          return;
+        }
+  
         parsedContent.forEach((exchange, index) => {
-          // Add user message
+          // Add user prompt message
           allMessages.push({
             id: `${code.id}-prompt-${index}`,
             content: exchange.prompt,
             isUser: true,
             userId: code.userId,
-            timestamp: new Date(code.createdAt)
+            timestamp: new Date(code.createdAt),
           });
-          
-          // Add response message
+  
+          // Add response message (handling 'responce' typo)
           allMessages.push({
             id: `${code.id}-response-${index}`,
-            content: exchange.responce,
+            content: exchange.responce || exchange.response, // Handle both spellings
             isUser: false,
             username: "Assistant",
-            timestamp: new Date(code.createdAt)
+            timestamp: new Date(code.createdAt),
           });
         });
       } catch (error) {
         console.error(`Error parsing content for code ${code.id}:`, error);
+        console.error("Content that caused error:", code.content);
       }
     });
-    
+  
     // Sort messages by timestamp
     return allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   };
+  
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

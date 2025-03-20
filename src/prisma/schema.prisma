@@ -32,7 +32,8 @@ model Teamcode{
   id              Int         @id @default(autoincrement())
   team           Team        @relation("teamcode_relation",fields: [teamId], references: [id])
   teamId         Int         @unique
-  maincodes      tempcodes[] @relation("maincodes_relation")
+  
+  // maincodes      tempcodes[] @relation("maincodes_relation")
   pendingcodes   tempcodes[] @relation("pendingcodes_relation")
 }
 model tempcodes{
@@ -40,8 +41,9 @@ model tempcodes{
   content    String
   user       User     @relation(fields: [userId], references: [id])
   userId     Int
-  mainteamcode   Teamcode? @relation("maincodes_relation", fields: [mainteamcodeid], references: [id])
-  mainteamcodeid Int?
+  // mainteamcode   Teamcode? @relation("maincodes_relation", fields: [mainteamcodeid], references: [id])
+  // mainteamcodeid Int?
+  ispending Boolean
   pendingin  Teamcode? @relation("pendingcodes_relation", fields: [pendingteamcodeid], references: [id])
   pendingteamcodeid Int?
   type String?
