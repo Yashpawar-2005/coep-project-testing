@@ -6,4 +6,5 @@ matplotlib
 dotenv
 pinecone-client
 pinecone
-sqlglot
+django
+tiktoken

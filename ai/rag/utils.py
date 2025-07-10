@@ -3,16 +3,17 @@ from dotenv import load_dotenv
 import os
 import json
 import time
+from embedding_operations import *
 load_dotenv()
 
 # pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"),environment = 'us-east-1')
 
-def check_index_exists(index_name,pc):
+def check_index_exists(index_name,pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"),environment = 'us-east-1')):
     if index_name in [i['name'] for i in pc.list_indexes()]:
         return True
     return False
 
-def create_pc_index(index_name,pc,dimensions=1024,metric='cosine',spec=ServerlessSpec(cloud="aws", region="us-east-1")):
+def create_pc_index(index_name,pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"),environment = 'us-east-1'),dimensions=1024,metric='cosine',spec=ServerlessSpec(cloud="aws", region="us-east-1")):
     pc.create_index(
         name=index_name,
         dimension=dimensions,
@@ -31,6 +32,5 @@ def extract_data(filename):
         for entry in data
         ]
     return extracted_data
-
 
 

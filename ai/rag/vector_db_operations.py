@@ -33,5 +33,6 @@ query_embedding = create_embeddings_for_query(query=query,pc=pc)
 
 results = similarity_search(index_name=index_name,query_embedding=query_embedding,pc=pc,namespace="ns1")
 
-print(results)
+ans = [match['metadata']['query'] for match in results.get('matches',[])]
+print(ans)
 
