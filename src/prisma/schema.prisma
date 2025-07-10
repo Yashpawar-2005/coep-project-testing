@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int          @id @default(autoincrement())
+  name       String
+  email      String       @unique
+  password   String
+  teams      Team[]
+  adminof    Team[]       @relation("admin_relation")
+  tempcodes  tempcodes[]
+}
+
+model Team {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  password    String
+  members     User[]
+  admin       User?        @relation("admin_relation", fields: [adminid], references: [id])
+  adminid     Int?
+  teamcode    Teamcode?    @relation("teamcode_relation")
+  description String?
+  createdAt   DateTime     @default(now())
+}
+
+model Teamcode {
+  id            Int         @id @default(autoincrement())
+  team          Team        @relation("teamcode_relation", fields: [teamId], references: [id])
+  teamId        Int         @unique
+  pendingcodes  tempcodes[] @relation("pendingcodes_relation")
+  maincode      Maincode?   @relation("maincode_relation")
+}
+
+model Maincode {
+  id            Int         @id @default(autoincrement())
+  code          Json
+  teamcode      Teamcode    @relation("maincode_relation", fields: [teamcodeId], references: [id])
+  teamcodeId    Int         @unique
+}
+
+model tempcodes {
+  id               Int        @id @default(autoincrement())
+  content          String
+  user             User       @relation(fields: [userId], references: [id])
+  userId           Int
+  ispending        Boolean
+  pendingin        Teamcode?  @relation("pendingcodes_relation", fields: [pendingteamcodeid], references: [id])
+  pendingteamcodeid Int?
+  type             String?
+  description      String?
+  title            String?
+  createdAt        DateTime   @default(now())
+}
