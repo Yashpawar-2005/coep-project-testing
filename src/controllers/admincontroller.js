@@ -1,6 +1,6 @@
 import { prisma } from "../db/Connect.js"
 const get_all_submissions = async (req, res) => {
-    try {
+    try{
         const adminid = req.userId;
         const roomid = req.params.roomid;
 
