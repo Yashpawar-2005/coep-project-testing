@@ -13,7 +13,7 @@ model User {
   email      String       @unique
   password   String
   teams      Team[]
-  adminof    Team[]       @relation("admin_relation")
+  adminof    Team[]       @relation("admin_relation" )
   tempcodes  tempcodes[]
 }
 
