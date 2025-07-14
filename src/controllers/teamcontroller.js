@@ -1,7 +1,7 @@
 import { prisma } from "../db/Connect.js"
 
 export const get_rooms=async (req,res) => {
-    try {
+    try{
         const userid=req.userId;
         const created_room=await prisma.team.findMany({
             where:{
